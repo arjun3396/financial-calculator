@@ -1,14 +1,23 @@
-import React from 'react'
+import React, { useState } from 'react'
 import SWPCalculator from './calculators/swp/SWPCalculator'
+import SIPCalculator from './calculators/sip/SIPCalculator'
 
 const NAV_ITEMS = [
-  { id: 'swp', label: 'SWP', ready: true },
-  { id: 'sip', label: 'SIP', ready: false },
+  { id: 'swp',  label: 'SWP',  ready: true  },
+  { id: 'sip',  label: 'SIP',  ready: true  },
   { id: 'fire', label: 'FIRE', ready: false },
-  { id: 'emi', label: 'EMI', ready: false },
+  { id: 'emi',  label: 'EMI',  ready: false },
 ]
 
+const CALCULATORS = {
+  swp: SWPCalculator,
+  sip: SIPCalculator,
+}
+
 export default function App() {
+  const [active, setActive] = useState('swp')
+  const ActiveCalc = CALCULATORS[active]
+
   return (
     <div className="page">
       <header className="site-header">
@@ -23,9 +32,17 @@ export default function App() {
           {NAV_ITEMS.map(item => (
             <a
               key={item.id}
-              className={'nav-item' + (item.id === 'swp' ? ' active' : '') + (!item.ready ? ' disabled' : '')}
+              className={
+                'nav-item' +
+                (active === item.id ? ' active' : '') +
+                (!item.ready    ? ' disabled' : '')
+              }
               href={'#' + item.id}
               title={!item.ready ? 'Coming soon' : undefined}
+              onClick={e => {
+                e.preventDefault()
+                if (item.ready) setActive(item.id)
+              }}
             >
               {item.label}
               {!item.ready && <span className="soon">soon</span>}
@@ -35,7 +52,7 @@ export default function App() {
       </header>
 
       <main>
-        <SWPCalculator />
+        {ActiveCalc && <ActiveCalc />}
       </main>
     </div>
   )

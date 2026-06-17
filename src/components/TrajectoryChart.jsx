@@ -1,33 +1,11 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react'
 import { formatCompact, formatRupees } from '../lib/format'
+import { niceCeil, smoothPath, niceXTicks } from '../lib/chartUtils'
 
 const W = 1000, H = 380
 const PAD = { l: 70, r: 24, t: 24, b: 44 }
 const INNER_W = W - PAD.l - PAD.r
 const INNER_H = H - PAD.t - PAD.b
-
-function niceCeil(n) {
-  if (n <= 0) return 1
-  const exp = Math.floor(Math.log10(n))
-  const f = n / Math.pow(10, exp)
-  const nf = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 3 ? 3 : f <= 5 ? 5 : f <= 6 ? 6 : 10
-  return nf * Math.pow(10, exp)
-}
-
-function smoothPath(pts) {
-  if (pts.length === 0) return ''
-  if (pts.length === 1) return `M ${pts[0][0]} ${pts[0][1]}`
-  let d = `M ${pts[0][0]} ${pts[0][1]}`
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] || pts[i]
-    const p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2
-    const t = 0.18
-    d += ` C ${p1[0] + (p2[0] - p0[0]) * t} ${p1[1] + (p2[1] - p0[1]) * t},`
-      + ` ${p2[0] - (p3[0] - p1[0]) * t} ${p2[1] - (p3[1] - p1[1]) * t},`
-      + ` ${p2[0]} ${p2[1]}`
-  }
-  return d
-}
 
 function Tooltip({ x, y, year, corpus }) {
   const w = 130, h = 48, pad = 8
@@ -47,15 +25,14 @@ export default function TrajectoryChart({ trajectory, target, years }) {
   const svgRef = useRef(null)
   const [hoverIdx, setHoverIdx] = useState(null)
 
-  const xScale = (yr)  => PAD.l + (yr / years) * INNER_W
+  const xScale = (yr)       => PAD.l + (yr / years) * INNER_W
   const yScale = (val, max) => PAD.t + INNER_H - (val / max) * INNER_H
 
   const maxCorpus = Math.max(...trajectory.map(p => p.corpus), target) * 1.1
 
   const { ticks, tickMax } = useMemo(() => {
     const tickMax = niceCeil(maxCorpus)
-    const step = tickMax / 6
-    return { ticks: Array.from({ length: 7 }, (_, i) => i * step), tickMax }
+    return { ticks: Array.from({ length: 7 }, (_, i) => i * tickMax / 6), tickMax }
   }, [maxCorpus])
 
   const ys = (val) => yScale(val, tickMax)
@@ -70,14 +47,7 @@ export default function TrajectoryChart({ trajectory, target, years }) {
     return smoothPath(pts) + ` L ${xScale(years)} ${PAD.t + INNER_H} L ${PAD.l} ${PAD.t + INNER_H} Z`
   }, [trajectory, tickMax])
 
-  const xTicks = useMemo(() => {
-    const rawStep = years / 6
-    const step = [1, 2, 5, 10, 20, 25, 50].find(s => s >= rawStep) || rawStep
-    const tks = []
-    for (let y = 0; y < years; y += step) tks.push(Math.round(y))
-    tks.push(years)
-    return tks
-  }, [years])
+  const xTicks = useMemo(() => niceXTicks(years), [years])
 
   const handleMove = useCallback((e) => {
     const rect = svgRef.current?.getBoundingClientRect()
@@ -94,7 +64,7 @@ export default function TrajectoryChart({ trajectory, target, years }) {
       <svg ref={svgRef} className="chart-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
         onMouseMove={handleMove} onMouseLeave={() => setHoverIdx(null)}>
         <defs>
-          <linearGradient id="area-gradient" x1="0" x2="0" y1="0" y2="1">
+          <linearGradient id="swp-area-gradient" x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%"   stopColor="#4ade9f" stopOpacity="0.18" />
             <stop offset="100%" stopColor="#4ade9f" stopOpacity="0" />
           </linearGradient>
@@ -111,7 +81,7 @@ export default function TrajectoryChart({ trajectory, target, years }) {
           <line className="chart-target-line" x1={PAD.l} x2={W - PAD.r} y1={ys(target)} y2={ys(target)} />
         )}
 
-        <path className="chart-area" d={areaPath} />
+        <path fill="url(#swp-area-gradient)" d={areaPath} />
         <path className="chart-line" d={linePath} />
 
         {xTicks.map(yr => (
