@@ -1,0 +1,30 @@
+:root {
+  /* Backgrounds */
+  --bg:      #1a1a1a;
+  --bg-2:    #232323;
+  --bg-3:    #2a2a2a;
+  --bg-row:  #262626;
+
+  /* Borders */
+  --line:      #333;
+  --line-soft: #2c2c2c;
+
+  /* Text */
+  --text:   #ececec;
+  --text-2: #b8b8b8;
+  --text-3: #8a8a8a;
+  --text-4: #6a6a6a;
+
+  /* Accent — teal */
+  --teal:      #4ade9f;
+  --teal-soft: rgba(74, 222, 159, 0.12);
+
+  /* Accent — amber */
+  --amber:      #e0a056;
+  --amber-soft: rgba(224, 160, 86, 0.14);
+
+  /* Typography */
+  --serif: "Source Serif 4", Georgia, serif;
+  --sans:  "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono:  ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
