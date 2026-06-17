@@ -14,7 +14,7 @@ const DEFAULTS = {
   stepUpEveryNYears: 3,
   stepUpPercent:     15,
   targetCr:          10,
-  years:             10,
+  years:             20,
 }
 
 export default function SWPCalculator() {
