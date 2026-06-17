@@ -1,29 +1,30 @@
-import React, { useState, useMemo } from 'react'
+import React, { useMemo } from 'react'
 import { simulate, findMaxStartingSWP } from './simulate'
 import { formatCompact, formatMonthly, formatINRCommas, parseRupees, parseNumber } from '../../lib/format'
+import { usePersistedState } from '../../lib/usePersistedState'
 import SliderRow from '../../components/SliderRow'
 import SummaryCard from '../../components/SummaryCard'
 import TrajectoryChart from '../../components/TrajectoryChart'
 import ScheduleTable from '../../components/ScheduleTable'
 
 const DEFAULTS = {
-  initialCorpus:    2_00_00_000,  // ₹2 Cr
-  cagr:             15,
-  startMonthlySWP:  1_10_000,
+  initialCorpus:     1_00_00_000,  // ₹1 Cr
+  cagr:              12,
+  startMonthlySWP:   1_10_000,
   stepUpEveryNYears: 3,
-  stepUpPercent:    15,
-  targetCr:         50,
-  years:            30,
+  stepUpPercent:     15,
+  targetCr:          10,
+  years:             10,
 }
 
 export default function SWPCalculator() {
-  const [initialCorpus,     setInitialCorpus]     = useState(DEFAULTS.initialCorpus)
-  const [cagr,               setCagr]              = useState(DEFAULTS.cagr)
-  const [startMonthlySWP,   setStartMonthlySWP]   = useState(DEFAULTS.startMonthlySWP)
-  const [stepUpEveryNYears, setStepUpEveryNYears] = useState(DEFAULTS.stepUpEveryNYears)
-  const [stepUpPercent,     setStepUpPercent]     = useState(DEFAULTS.stepUpPercent)
-  const [targetCr,           setTargetCr]          = useState(DEFAULTS.targetCr)
-  const [years,              setYears]             = useState(DEFAULTS.years)
+  const [initialCorpus,     setInitialCorpus]     = usePersistedState('swp.initialCorpus',     DEFAULTS.initialCorpus)
+  const [cagr,               setCagr]              = usePersistedState('swp.cagr',               DEFAULTS.cagr)
+  const [startMonthlySWP,   setStartMonthlySWP]   = usePersistedState('swp.startMonthlySWP',   DEFAULTS.startMonthlySWP)
+  const [stepUpEveryNYears, setStepUpEveryNYears] = usePersistedState('swp.stepUpEveryNYears', DEFAULTS.stepUpEveryNYears)
+  const [stepUpPercent,     setStepUpPercent]     = usePersistedState('swp.stepUpPercent',     DEFAULTS.stepUpPercent)
+  const [targetCr,           setTargetCr]          = usePersistedState('swp.targetCr',           DEFAULTS.targetCr)
+  const [years,              setYears]             = usePersistedState('swp.years',              DEFAULTS.years)
 
   const targetCorpus = targetCr * 1_00_00_000
 
