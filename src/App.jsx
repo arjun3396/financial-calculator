@@ -1,17 +1,19 @@
 import React, { useState } from 'react'
 import SWPCalculator from './calculators/swp/SWPCalculator'
 import SIPCalculator from './calculators/sip/SIPCalculator'
+import FIRECalculator from './calculators/fire/FIRECalculator'
 
 const NAV_ITEMS = [
   { id: 'swp',  label: 'SWP',  ready: true  },
   { id: 'sip',  label: 'SIP',  ready: true  },
-  { id: 'fire', label: 'FIRE', ready: false },
+  { id: 'fire', label: 'FIRE', ready: true  },
   { id: 'emi',  label: 'EMI',  ready: false },
 ]
 
 const CALCULATORS = {
   swp: SWPCalculator,
   sip: SIPCalculator,
+  fire: FIRECalculator,
 }
 
 export default function App() {

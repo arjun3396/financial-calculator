@@ -89,6 +89,9 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
+.fire-summary-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
 .summary-card {
   background: var(--bg-2);
   border: 1px solid var(--line);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
+import InfoTooltip from './InfoTooltip'
 
-export default function SliderRow({ label, min, max, step, value, onChange, format, editParse, editSerialize }) {
+export default function SliderRow({ label, info, min, max, step, value, onChange, format, editParse, editSerialize }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const inputRef = useRef(null)
@@ -33,7 +34,7 @@ export default function SliderRow({ label, min, max, step, value, onChange, form
 
   return (
     <div className="input-row">
-      <div className="input-label">{label}</div>
+      <div className="input-label">{label}{info && <InfoTooltip text={info} />}</div>
       <input
         type="range"
         className="slider"

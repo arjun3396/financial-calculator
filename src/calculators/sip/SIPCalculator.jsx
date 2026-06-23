@@ -4,8 +4,21 @@ import { formatCompact, formatMonthly, formatRupees, formatINRCommas, parseRupee
 import { usePersistedState } from '../../lib/usePersistedState'
 import SliderRow from '../../components/SliderRow'
 import SummaryCard from '../../components/SummaryCard'
+import InfoTooltip from '../../components/InfoTooltip'
 import SIPChart from './SIPChart'
 import ScheduleTable from '../../components/ScheduleTable'
+
+const INFO = {
+  monthlySIP:         'SIP = Systematic Investment Plan. A fixed amount invested every month into mutual funds or stocks. You benefit from rupee cost averaging — buying more units when markets are low, fewer when high.',
+  annualReturn:       'The expected Compound Annual Growth Rate (CAGR) on your investments. Indian equity mutual funds have historically delivered 12–15% CAGR over long periods, though past returns don\'t guarantee future results.',
+  years:              'The total number of years you plan to keep investing. Longer horizons let compounding work harder — doubling the time can more than quadruple your corpus.',
+  sipStepUpPercent:   'Increase your monthly SIP by this percentage at the start of each step-up period. Even a 10% annual step-up dramatically boosts your final corpus because you invest more as your income grows.',
+  stepUpEveryNYears:  'How often the step-up applies. Every 1 year = your SIP increases annually. Every 3 years = it increases once every 3 years.',
+  initialLumpsum:     'A one-time investment made at the start alongside your regular SIP. It compounds for the entire duration, so even a small lump sum makes a big difference over 15–20 years.',
+  periodicLumpsum:    'An extra injection of capital (like an annual bonus or maturity payout) added to your portfolio at regular intervals. Invested at the start of the chosen year and compounds from there.',
+  lumpsumEveryNYears: 'How often the periodic lump sum is added. Every 3 years means you inject extra capital at years 3, 6, 9... and so on.',
+  goalCr:             'Your target corpus at the end of the investment horizon. The calculator also reverse-engineers the monthly SIP you\'d need to reach this goal.',
+}
 
 const DEFAULTS = {
   monthlySIP:         10_000,
@@ -74,55 +87,55 @@ export default function SIPCalculator() {
       <section className="section">
         <p className="section-label">Inputs</p>
         <div className="card">
-          <SliderRow label="Monthly SIP"
+          <SliderRow label="Monthly SIP" info={INFO.monthlySIP}
             min={1_000} max={2_00_000} step={1_000}
             value={monthlySIP} onChange={setMonthlySIP}
             format={formatMonthly}
             editParse={parseRupees} editSerialize={v => formatINRCommas(v)} />
 
-          <SliderRow label="Expected annual return (%)"
+          <SliderRow label="Expected annual return (%)" info={INFO.annualReturn}
             min={4} max={30} step={0.5}
             value={annualReturn} onChange={setAnnualReturn}
             format={v => v + '%'}
             editParse={parseNumber} editSerialize={v => String(v)} />
 
-          <SliderRow label="Investment horizon (years)"
+          <SliderRow label="Investment horizon (years)" info={INFO.years}
             min={1} max={40} step={1}
             value={years} onChange={v => setYears(Math.max(1, Math.round(v)))}
             format={v => v + (v === 1 ? ' year' : ' years')}
             editParse={parseNumber} editSerialize={v => String(v)} />
 
-          <SliderRow label="Annual SIP step‑up %"
+          <SliderRow label="Annual SIP step‑up %" info={INFO.sipStepUpPercent}
             min={0} max={30} step={1}
             value={sipStepUpPercent} onChange={setSipStepUpPercent}
             format={v => v + '%'}
             editParse={parseNumber} editSerialize={v => String(v)} />
 
-          <SliderRow label="Step‑up every N years"
+          <SliderRow label="Step‑up every N years" info={INFO.stepUpEveryNYears}
             min={1} max={5} step={1}
             value={stepUpEveryNYears} onChange={v => setStepUpEveryNYears(Math.max(1, Math.round(v)))}
             format={v => v + (v === 1 ? ' year' : ' years')}
             editParse={parseNumber} editSerialize={v => String(v)} />
 
-          <SliderRow label="Initial lump sum"
+          <SliderRow label="Initial lump sum" info={INFO.initialLumpsum}
             min={0} max={50_00_000} step={25_000}
             value={initialLumpsum} onChange={setInitialLumpsum}
             format={v => v === 0 ? 'None' : formatCompact(v)}
             editParse={parseRupees} editSerialize={v => formatINRCommas(v)} />
 
-          <SliderRow label="Periodic extra lump sum"
+          <SliderRow label="Periodic extra lump sum" info={INFO.periodicLumpsum}
             min={0} max={20_00_000} step={10_000}
             value={periodicLumpsum} onChange={setPeriodicLumpsum}
             format={v => v === 0 ? 'None' : formatCompact(v)}
             editParse={parseRupees} editSerialize={v => formatINRCommas(v)} />
 
-          <SliderRow label="Lump sum every N years"
+          <SliderRow label="Lump sum every N years" info={INFO.lumpsumEveryNYears}
             min={1} max={10} step={1}
             value={lumpsumEveryNYears} onChange={v => setLumpsumEveryNYears(Math.max(1, Math.round(v)))}
             format={v => v + (v === 1 ? ' year' : ' years')}
             editParse={parseNumber} editSerialize={v => String(v)} />
 
-          <SliderRow label={`Goal at year ${years} (Cr)`}
+          <SliderRow label={`Goal at year ${years} (Cr)`} info={INFO.goalCr}
             min={0.1} max={50} step={0.1}
             value={goalCr} onChange={setGoalCr}
             format={v => formatCompact(v * 1_00_00_000)}
@@ -141,7 +154,7 @@ export default function SIPCalculator() {
           <SummaryCard label="Total invested"  value={formatCompact(sim.totalInvested)} />
           <SummaryCard label="Wealth gained"   value={formatCompact(sim.totalGain)} tone="teal" />
           <SummaryCard
-            label="SIP needed for goal"
+            label={<>SIP needed for goal <InfoTooltip text="The minimum monthly SIP (with your current step-up settings) required to reach your goal corpus by the end of the horizon. Calculated by binary search." /></>}
             value={requiredSIP === 0 ? 'Already met' : formatMonthly(requiredSIP)}
             tone="amber" />
         </div>
