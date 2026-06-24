@@ -3,12 +3,14 @@ import SWPCalculator from './calculators/swp/SWPCalculator'
 import SIPCalculator from './calculators/sip/SIPCalculator'
 import FIRECalculator from './calculators/fire/FIRECalculator'
 import EMICalculator from './calculators/emi/EMICalculator'
+import LVICalculator from './calculators/lvi/LVICalculator'
 
 const NAV_ITEMS = [
   { id: 'swp',  label: 'SWP',  ready: true },
   { id: 'sip',  label: 'SIP',  ready: true },
   { id: 'fire', label: 'FIRE', ready: true },
   { id: 'emi',  label: 'EMI',  ready: true },
+  { id: 'lvi',  label: 'Loan vs Invest', ready: true },
 ]
 
 const CALCULATORS = {
@@ -16,6 +18,7 @@ const CALCULATORS = {
   sip: SIPCalculator,
   fire: FIRECalculator,
   emi: EMICalculator,
+  lvi: LVICalculator,
 }
 
 export default function App() {
