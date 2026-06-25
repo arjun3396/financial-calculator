@@ -7,14 +7,26 @@ const PAD = { l: 76, r: 32, t: 28, b: 44 }
 const INNER_W = W - PAD.l - PAD.r
 const INNER_H = H - PAD.t - PAD.b
 
-function Tooltip({ x, y, year, loanSaved, investGain, repayFraction, splitLoanSaved, splitInvGain }) {
+function Tooltip({ x, y, year, loanBenefit, interestSaved, freedEmi, investGain, repayFraction, splitLoanSaved, splitInvGain }) {
   const hasCustomSplit = repayFraction > 0 && repayFraction < 100
-  const lines = hasCustomSplit ? 5 : 3
+  const hasFreedEmi    = freedEmi > 0
+  const lines = 2 + (hasFreedEmi ? 2 : 1) + (hasCustomSplit ? 2 : 0)
   const h = 20 + lines * 18 + 6
-  const w = 230
+  const w = 248
   let tx = Math.max(4, Math.min(x - w / 2, W - 4 - w))
   let ty = y - h - 14
   if (ty < 4) ty = y + 14
+
+  let row = 34
+  const line = (text, color, fontSize) => {
+    const el = (
+      <text key={row} x={10} y={row} style={{ fontSize: fontSize ?? 12, fill: color, fontFamily: 'var(--sans)' }}>
+        {text}
+      </text>
+    )
+    row += 18
+    return el
+  }
 
   return (
     <g transform={`translate(${tx} ${ty})`}>
@@ -22,22 +34,11 @@ function Tooltip({ x, y, year, loanSaved, investGain, repayFraction, splitLoanSa
       <text className="chart-tooltip-title" x={10} y={16}>
         {year === 0 ? 'Start' : `End of year ${year}`}
       </text>
-      <text x={10} y={34} style={{ fontSize: 12, fill: 'var(--teal)', fontFamily: 'var(--sans)' }}>
-        All loan: {formatCompact(loanSaved)} saved
-      </text>
-      <text x={10} y={52} style={{ fontSize: 12, fill: 'var(--amber)', fontFamily: 'var(--sans)' }}>
-        All invest: {formatCompact(investGain)} gain
-      </text>
-      {hasCustomSplit && (
-        <>
-          <text x={10} y={70} style={{ fontSize: 11, fill: 'var(--text-3)', fontFamily: 'var(--sans)' }}>
-            Your split — loan: {formatCompact(splitLoanSaved)}, invest: {formatCompact(splitInvGain)}
-          </text>
-          <text x={10} y={87} style={{ fontSize: 11, fill: 'var(--text-2)', fontFamily: 'var(--sans)' }}>
-            Net: {formatCompact(splitLoanSaved + splitInvGain)}
-          </text>
-        </>
-      )}
+      {line(`All loan benefit: ${formatCompact(loanBenefit)}`, 'var(--teal)')}
+      {hasFreedEmi && line(`  ↳ interest: ${formatCompact(interestSaved)}, freed EMI: ${formatCompact(freedEmi)}`, 'var(--text-3)', 10.5)}
+      {line(`All invest: ${formatCompact(investGain)} gain`, 'var(--amber)')}
+      {hasCustomSplit && line(`Your split — loan: ${formatCompact(splitLoanSaved)}, invest: ${formatCompact(splitInvGain)}`, 'var(--text-3)', 11)}
+      {hasCustomSplit && line(`Split net: ${formatCompact(splitLoanSaved + splitInvGain)}`, 'var(--text-2)', 11)}
     </g>
   )
 }
@@ -63,7 +64,6 @@ export default function LVIChart({ yearlyData, horizon, loanRate, investmentRetu
   const xScale = useCallback(yr => PAD.l + (yr / horizon) * INNER_W, [horizon])
   const yScale = useCallback(v  => PAD.t + INNER_H - (v / tickMax) * INNER_H, [tickMax])
 
-  // Build SVG point arrays
   const loanPts  = useMemo(() =>
     yearlyData.map(d => [xScale(d.year), yScale(d.allLoanSaved)]),
     [yearlyData, xScale, yScale]
@@ -81,7 +81,7 @@ export default function LVIChart({ yearlyData, horizon, loanRate, investmentRetu
     [yearlyData, xScale, yScale, hasCustomSplit]
   )
 
-  // Crossover year (first year invest > loan)
+  // First year where invest gain surpasses total loan benefit
   const crossoverYear = useMemo(() => {
     for (const d of yearlyData) {
       if (d.allInvestGain > d.allLoanSaved) return d.year
@@ -89,7 +89,6 @@ export default function LVIChart({ yearlyData, horizon, loanRate, investmentRetu
     return null
   }, [yearlyData])
 
-  // X axis ticks
   const xTicks = useMemo(() => {
     const step = horizon <= 10 ? 2 : horizon <= 20 ? 5 : 10
     const result = []
@@ -101,15 +100,13 @@ export default function LVIChart({ yearlyData, horizon, loanRate, investmentRetu
   const handleMove = useCallback(e => {
     const rect = svgRef.current?.getBoundingClientRect()
     if (!rect) return
-    const xPx    = ((e.clientX - rect.left) / rect.width) * W
-    const yrRaw  = ((xPx - PAD.l) / INNER_W) * horizon
+    const xPx   = ((e.clientX - rect.left) / rect.width) * W
+    const yrRaw = ((xPx - PAD.l) / INNER_W) * horizon
     setHoverY(Math.max(1, Math.min(horizon, Math.round(yrRaw))))
   }, [horizon])
 
   const hoverData = hoverY != null ? yearlyData.find(d => d.year === hoverY) : null
-
-  // Bottom anchor for area fills
-  const bottom = PAD.t + INNER_H
+  const bottom    = PAD.t + INNER_H
 
   const loanAreaPath = useMemo(() => {
     if (!loanPts.length) return ''
@@ -133,7 +130,7 @@ export default function LVIChart({ yearlyData, horizon, loanRate, investmentRetu
       <div style={{ display: 'flex', gap: 20, marginBottom: 14, fontSize: 12, color: 'var(--text-3)', flexWrap: 'wrap' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ width: 20, height: 2, background: 'var(--teal)', display: 'inline-block', borderRadius: 2 }} />
-          All into loan (interest saved)
+          All into loan (interest saved + freed EMI reinvested)
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ width: 20, height: 2, background: 'var(--amber)', display: 'inline-block', borderRadius: 2 }} />
@@ -175,21 +172,21 @@ export default function LVIChart({ yearlyData, horizon, loanRate, investmentRetu
         <path d={loanAreaPath}   fill="url(#lvi-loan-grad)" />
         <path d={investAreaPath} fill="url(#lvi-invest-grad)" />
 
-        {/* Loan line (teal) */}
+        {/* Loan line — teal */}
         {loanPts.length > 0 && (
           <path d={smoothPath(loanPts)} fill="none"
             stroke="var(--teal)" strokeWidth="2.4"
             strokeLinejoin="round" strokeLinecap="round" />
         )}
 
-        {/* Invest line (amber) */}
+        {/* Invest line — amber */}
         {investPts.length > 0 && (
           <path d={smoothPath(investPts)} fill="none"
             stroke="var(--amber)" strokeWidth="2.4"
             strokeLinejoin="round" strokeLinecap="round" />
         )}
 
-        {/* Split line (purple dashed) */}
+        {/* Split line — purple dashed */}
         {hasCustomSplit && splitPts.length > 0 && (
           <path d={smoothPath(splitPts)} fill="none"
             stroke="#a78bfa" strokeWidth="1.8"
@@ -197,7 +194,7 @@ export default function LVIChart({ yearlyData, horizon, loanRate, investmentRetu
             strokeLinejoin="round" strokeLinecap="round" />
         )}
 
-        {/* Crossover year marker */}
+        {/* Crossover marker */}
         {crossoverYear != null && (
           <>
             <line
@@ -235,7 +232,9 @@ export default function LVIChart({ yearlyData, horizon, loanRate, investmentRetu
               x={xScale(hoverY)}
               y={Math.min(yScale(hoverData.allLoanSaved), yScale(hoverData.allInvestGain))}
               year={hoverY}
-              loanSaved={hoverData.allLoanSaved}
+              loanBenefit={hoverData.allLoanSaved}
+              interestSaved={hoverData.allInterestSaved}
+              freedEmi={hoverData.yFreedEmiAll}
               investGain={hoverData.allInvestGain}
               repayFraction={repayFraction}
               splitLoanSaved={hoverData.splitLoanSaved}

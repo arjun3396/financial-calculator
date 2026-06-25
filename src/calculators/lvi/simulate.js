@@ -1,9 +1,9 @@
 // Loan vs Investment calculator.
 // Given a bulk lump sum, models two scenarios:
-//   1. Put some/all into loan prepayment → interest saved
+//   1. Put some/all into loan prepayment → interest saved + freed EMI reinvested
 //   2. Put the rest into an investment → portfolio gain
-// Computes a year-by-year comparison so the chart can show
-// cumulative benefit of each path over time.
+// When a loan closes early, the monthly EMI that's no longer owed is reinvested
+// as a monthly SIP — this "freed EMI gain" is included in the total loan benefit.
 
 function calcEMI(principal, annualRate, tenureMonths) {
   if (annualRate === 0) return principal / tenureMonths
@@ -49,6 +49,21 @@ function fv(amount, annualReturnPct, years) {
   return amount * Math.pow(1 + annualReturnPct / 100, years)
 }
 
+// SIP future value of freed monthly EMI payments invested after early loan closure.
+// Payments run from month (accelMonths+1) to min(baseMonths, horizonMonths),
+// then the accumulated corpus compounds to horizonMonths.
+function calcFreedEmiGain(emi, annualReturn, accelMonths, baseMonths, horizonMonths) {
+  const freeFrom = accelMonths + 1
+  const freeTo   = Math.min(baseMonths, horizonMonths)
+  const n        = Math.max(0, freeTo - freeFrom + 1)
+  if (n <= 0 || emi <= 0) return 0
+  if (annualReturn <= 0) return emi * n
+  const r       = annualReturn / 100 / 12
+  const fvAtEnd = emi * ((Math.pow(1 + r, n) - 1) / r)  // SIP FV at month freeTo
+  const extra   = Math.max(0, horizonMonths - freeTo)
+  return fvAtEnd * Math.pow(1 + r, extra)                 // compound to horizonMonths
+}
+
 export function simulate({
   bulkAmount,
   loanBalance,
@@ -58,9 +73,9 @@ export function simulate({
   horizon,
   repayFraction,
 }) {
-  const repayRatio  = Math.max(0, Math.min(100, repayFraction)) / 100
-  const maxPrepay   = Math.min(bulkAmount, loanBalance)
-  const loanPortion = Math.min(bulkAmount * repayRatio, loanBalance)
+  const repayRatio    = Math.max(0, Math.min(100, repayFraction)) / 100
+  const maxPrepay     = Math.min(bulkAmount, loanBalance)
+  const loanPortion   = Math.min(bulkAmount * repayRatio, loanBalance)
   const investPortion = bulkAmount - bulkAmount * repayRatio
 
   // Three loan scenarios: no prepay, split prepay, full prepay
@@ -68,44 +83,69 @@ export function simulate({
   const splitLoan    = runLoan(loanBalance, loanRate, remainingTenure, loanPortion)
   const fullPrepLoan = runLoan(loanBalance, loanRate, remainingTenure, maxPrepay)
 
+  const horizonMonths = horizon * 12
+
   // Interest saved for each scenario
   const interestSaved    = Math.max(0, baseLoan.totalInterest - splitLoan.totalInterest)
   const monthsSaved      = Math.max(0, baseLoan.totalMonths  - splitLoan.totalMonths)
   const maxInterestSaved = Math.max(0, baseLoan.totalInterest - fullPrepLoan.totalInterest)
+  const maxMonthsSaved   = Math.max(0, baseLoan.totalMonths  - fullPrepLoan.totalMonths)
+
+  // Freed EMI reinvestment: SIP of monthly EMI from early closure to original loan end
+  const allFreedEmiGain   = calcFreedEmiGain(baseLoan.emi, investmentReturn, fullPrepLoan.totalMonths, baseLoan.totalMonths, horizonMonths)
+  const splitFreedEmiGain = calcFreedEmiGain(baseLoan.emi, investmentReturn, splitLoan.totalMonths,    baseLoan.totalMonths, horizonMonths)
+
+  // Total loan path benefits (interest saved + freed EMI reinvested)
+  const allLoanBenefit     = maxInterestSaved + allFreedEmiGain
+  const splitPrepayBenefit = interestSaved + splitFreedEmiGain
 
   // Investment gains
   const investGain     = fv(investPortion, investmentReturn, horizon) - investPortion
   const fullInvestGain = fv(bulkAmount,    investmentReturn, horizon) - bulkAmount
 
-  // Net benefit for split
-  const totalBenefit = interestSaved + investGain
+  // Split total benefit
+  const totalBenefit = splitPrepayBenefit + investGain
 
-  // Better option (pure comparison, all-in each)
-  const betterOption  = maxInterestSaved >= fullInvestGain ? 'loan' : 'invest'
-  const benefitDiff   = Math.abs(maxInterestSaved - fullInvestGain)
+  // Better option (apples-to-apples: full loan benefit vs full invest gain)
+  const betterOption = allLoanBenefit >= fullInvestGain ? 'loan' : 'invest'
+  const benefitDiff  = Math.abs(allLoanBenefit - fullInvestGain)
 
-  // Effective annualised return from full prepay: solves P*(1+r)^T = P + saved
+  // Effective annualised return from interest saved only (guaranteed component)
   let effectiveLoanReturn = null
   if (maxPrepay > 0 && remainingTenure > 0 && maxInterestSaved > 0) {
     effectiveLoanReturn = (Math.pow(1 + maxInterestSaved / maxPrepay, 1 / remainingTenure) - 1) * 100
   }
 
-  // Minimum investment return so that FV(bulkAmount, horizon) >= bulkAmount + maxInterestSaved
+  // Break-even invest rate: find r where FV(bulk,r,H)-bulk = maxInterestSaved + freedEmiGain(r)
+  // Both sides use the same rate r, so binary search is needed.
   let breakEvenInvestRate = null
-  if (maxInterestSaved > 0 && horizon > 0 && bulkAmount > 0) {
-    breakEvenInvestRate = (Math.pow((bulkAmount + maxInterestSaved) / bulkAmount, 1 / horizon) - 1) * 100
+  {
+    const highInvest = fv(bulkAmount, 60, horizon) - bulkAmount
+    const highLoan   = maxInterestSaved + calcFreedEmiGain(baseLoan.emi, 60, fullPrepLoan.totalMonths, baseLoan.totalMonths, horizonMonths)
+    if (allLoanBenefit > 0 && horizon > 0 && bulkAmount > 0 && highInvest > highLoan) {
+      let lo = 0.01, hi = 60
+      for (let i = 0; i < 64; i++) {
+        const mid        = (lo + hi) / 2
+        const investSide = fv(bulkAmount, mid, horizon) - bulkAmount
+        const loanSide   = maxInterestSaved + calcFreedEmiGain(baseLoan.emi, mid, fullPrepLoan.totalMonths, baseLoan.totalMonths, horizonMonths)
+        if (investSide < loanSide) lo = mid; else hi = mid
+      }
+      breakEvenInvestRate = (lo + hi) / 2
+    }
   }
 
-  // Loan rate at which interest saved equals fullInvestGain (binary search)
+  // Break-even loan rate: find lr where interestSaved(lr) + freedEmiGain(investmentReturn, lr) = fullInvestGain
   let breakEvenLoanRate = null
   if (fullInvestGain > 0 && loanBalance > 0 && remainingTenure > 0) {
     let lo = 0.01, hi = 60
     for (let i = 0; i < 64; i++) {
-      const mid   = (lo + hi) / 2
-      const bBase = runLoan(loanBalance, mid, remainingTenure, 0)
-      const bPrep = runLoan(loanBalance, mid, remainingTenure, maxPrepay)
-      const saved = Math.max(0, bBase.totalInterest - bPrep.totalInterest)
-      if (saved < fullInvestGain) lo = mid; else hi = mid
+      const mid        = (lo + hi) / 2
+      const bBase      = runLoan(loanBalance, mid, remainingTenure, 0)
+      const bPrep      = runLoan(loanBalance, mid, remainingTenure, maxPrepay)
+      const saved      = Math.max(0, bBase.totalInterest - bPrep.totalInterest)
+      const freed      = calcFreedEmiGain(bBase.emi, investmentReturn, bPrep.totalMonths, bBase.totalMonths, horizonMonths)
+      const loanBenefit = saved + freed
+      if (loanBenefit < fullInvestGain) lo = mid; else hi = mid
     }
     breakEvenLoanRate = (lo + hi) / 2
   }
@@ -123,20 +163,31 @@ export function simulate({
     cumSplit += splitRow?.interestTotal ?? 0
     cumFull  += fullRow?.interestTotal  ?? 0
 
-    const allLoanSaved  = Math.max(0, Math.round(cumBase - cumFull))
-    const splitLoanSaved = Math.max(0, Math.round(cumBase - cumSplit))
-    const allInvestGain  = Math.round(fv(bulkAmount,     investmentReturn, y) - bulkAmount)
-    const splitInvGain   = Math.round(fv(investPortion,  investmentReturn, y) - investPortion)
+    const allInterestSaved   = Math.max(0, Math.round(cumBase - cumFull))
+    const splitInterestSaved = Math.max(0, Math.round(cumBase - cumSplit))
+    const allInvestGain      = Math.round(fv(bulkAmount,    investmentReturn, y) - bulkAmount)
+    const splitInvGain       = Math.round(fv(investPortion, investmentReturn, y) - investPortion)
 
-    // Loan balance for this year (null if loan is already closed)
+    // Freed EMI gains accumulated to year y
+    const yFreedEmiAll   = Math.round(calcFreedEmiGain(baseLoan.emi, investmentReturn, fullPrepLoan.totalMonths, baseLoan.totalMonths, y * 12))
+    const yFreedEmiSplit = Math.round(calcFreedEmiGain(baseLoan.emi, investmentReturn, splitLoan.totalMonths,    baseLoan.totalMonths, y * 12))
+
+    // Combined loan path benefit at year y
+    const allLoanSaved   = allInterestSaved + yFreedEmiAll
+    const splitLoanSaved = splitInterestSaved + yFreedEmiSplit
+
     const accelClosed = y > Math.ceil(splitLoan.totalMonths / 12)
     const baseClosed  = y > Math.ceil(baseLoan.totalMonths  / 12)
 
     yearlyData.push({
       year: y,
-      allLoanSaved,
+      allLoanSaved,           // total loan benefit (interest + freed EMI)
+      allInterestSaved,       // interest component only
+      yFreedEmiAll,           // freed EMI component only
       allInvestGain,
-      splitLoanSaved,
+      splitLoanSaved,         // split loan total benefit
+      splitInterestSaved,
+      yFreedEmiSplit,
       splitInvGain,
       splitTotalBenefit: splitLoanSaved + splitInvGain,
       baseLoanBalance:  baseClosed  ? 0 : Math.round(baseRow?.balance  ?? 0),
@@ -147,17 +198,22 @@ export function simulate({
   }
 
   return {
-    emi:            Math.round(baseLoan.emi),
-    loanPortion:    Math.round(loanPortion),
-    investPortion:  Math.round(investPortion),
-    interestSaved:  Math.round(interestSaved),
+    emi:                Math.round(baseLoan.emi),
+    loanPortion:        Math.round(loanPortion),
+    investPortion:      Math.round(investPortion),
+    interestSaved:      Math.round(interestSaved),
     monthsSaved,
-    maxInterestSaved: Math.round(maxInterestSaved),
-    investGain:     Math.round(investGain),
-    fullInvestGain: Math.round(fullInvestGain),
-    totalBenefit:   Math.round(totalBenefit),
+    maxInterestSaved:   Math.round(maxInterestSaved),
+    maxMonthsSaved,
+    allFreedEmiGain:    Math.round(allFreedEmiGain),
+    allLoanBenefit:     Math.round(allLoanBenefit),
+    splitFreedEmiGain:  Math.round(splitFreedEmiGain),
+    splitPrepayBenefit: Math.round(splitPrepayBenefit),
+    investGain:         Math.round(investGain),
+    fullInvestGain:     Math.round(fullInvestGain),
+    totalBenefit:       Math.round(totalBenefit),
     betterOption,
-    benefitDiff:    Math.round(benefitDiff),
+    benefitDiff:        Math.round(benefitDiff),
     effectiveLoanReturn,
     breakEvenInvestRate,
     breakEvenLoanRate,
